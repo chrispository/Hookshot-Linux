@@ -239,6 +239,21 @@ static DWORD WINAPI pad_main(void *arg) {
         }
         last_lo = lo;
         last_hi = hi;
+        {   /* (HOS_PAD_LOG=1: every button change, the Switch's names; is the pad's input reaching the host at all) */
+            static int pad_log = -1;
+            static uint64_t logged;
+            if (pad_log < 0) pad_log = getenv("HOS_PAD_LOG") != NULL;
+            if (pad_log && b != logged) {
+                static const char *names[16] = {"A", "B", "X", "Y", "LS", "RS", "L", "R", "ZL", "ZR", "+", "-",
+                                                "left", "up", "right", "down"};
+                char line[128];
+                int n = 0;
+                for (unsigned k = 0; k < 16; k++)
+                    if (b >> k & 1) n += snprintf(line + n, sizeof line - n, "%s ", names[k]);
+                hos_log("pad: %s(%#llx)", n ? line : "(none)", (unsigned long long)b);
+                logged = b;
+            }
+        }
         AcquireSRWLockExclusive(&state_lock);
         state_buttons = b;
         memcpy(state_stick, s, sizeof s);
