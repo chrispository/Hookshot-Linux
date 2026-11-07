@@ -52,7 +52,7 @@ for tool in clang clang++ pkg-config; do
 done
 command -v llvm-ar >/dev/null || { echo "error: missing llvm-ar" >&2; exit 1; }
 
-if ! pkg-config --exists sdl3 libavcodec libavutil libswscale libswresample; then
+if ! pkg-config --exists sdl3 libavcodec libavformat libavutil libswscale libswresample; then
     cat >&2 <<'EOF'
 error: SDL3 and FFmpeg development packages are required.
 On Arch-like systems, install SDL3, FFmpeg, pkgconf, clang, llvm,

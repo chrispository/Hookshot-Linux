@@ -36,6 +36,36 @@ def apply(gen):
         print("oot_patches: dynamic resolution switch in", os.path.basename(path))
     if done != 1:
         print("oot_patches: WARNING: the dynamic resolution branch was found %d times" % done)
+    if os.environ.get("OOT_DIV_PROBE"):
+        div_probe(gen)
+
+
+# Temporary diagnostic for the ultrawide work (branch ultrawide-43-18): log every float division whose
+# quotient lands near 16:9 (1.77778) with the caller's host address, so a short play session lists the
+# candidate camera-ascent sites (samap.py maps the addresses back to f_<guest> functions). Idempotent.
+PROBE_MARK = "/* oot aspect-div probe (temporary: ultrawide-43-18) */"
+PROBE_OLD = "A64_FPX_FN uint64_t a64_fpx_div32_div32(Ctx *A64_NOESC c, uint64_t a0, uint64_t a1) {"
+PROBE_NEW = ('#include <stdio.h>\n#include <string.h>\n' + PROBE_MARK + '\n' + PROBE_OLD +
+             ' { static int n; float fa, fb; memcpy(&fa, &a0, 4); memcpy(&fb, &a1, 4);'
+             ' if (n < 500 && fb > 1.0f && fb < 8192.0f && fa > 1.0f && fa < 8192.0f)'
+             ' { float q = fa / fb; if (q > 1.772f && q < 1.783f)'
+             ' { n++; fprintf(stderr, "aspect-div q=%.6f a=%.3f b=%.3f at %p\\n", q, fa, fb, __builtin_return_address(0)); } } }')
+
+
+def div_probe(gen):
+    path = os.path.join(gen, "a64_fpx.h")
+    with open(path, encoding="utf-8", newline="") as f:
+        s = f.read()
+    if PROBE_MARK in s:
+        print("oot_patches: aspect-div probe already present")
+        return
+    if PROBE_OLD not in s:
+        print("oot_patches: WARNING: div probe anchor not found in a64_fpx.h")
+        return
+    s = s.replace(PROBE_OLD, PROBE_NEW, 1)
+    with open(path, "w", encoding="utf-8", newline="") as f:
+        f.write(s)
+    print("oot_patches: aspect-div probe installed in a64_fpx.h")
 
 
 if __name__ == "__main__":

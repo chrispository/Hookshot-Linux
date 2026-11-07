@@ -7,6 +7,13 @@
 int wgr_start(void *hwnd) { (void)hwnd; return 0; }
 void wgr_resize(int width, int height) { (void)width; (void)height; }
 const char *wgr_describe(void) { return "no WebGPU renderer"; }
+/* (rx_present_fx.cpp owns the real one; there is no renderer in this build, so F6-F10 do nothing) */
+const char *rx_present_hotkey(int key) { (void)key; return "no renderer (wgpu-native missing)"; }
+/* (rx_debug.cpp / rx_core.cpp: RenderDoc captures and the screenshot screen-flash; no renderer here) */
+void rx_request_rdoc_capture(int frames) { (void)frames; }
+void rx_flash_dark_arm(void) {}
+void rx_request_frame_dump(void) {}
+void rx_set_screenshot_ms(int64_t ms) { (void)ms; }
 void wgr_stats(int64_t *draws, int64_t *skipped, int64_t *pipelines) {
     if (draws) *draws = 0;
     if (skipped) *skipped = 0;
