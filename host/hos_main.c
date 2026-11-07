@@ -124,6 +124,30 @@ static int reserve_guest(void) {
 uint8_t *hos_guest_base(void) { return A64_MEM; }
 uint64_t hos_guest_size(void) { return GUEST_SPACE; }
 
+/* (hookshot) Watches the text release-callback table entry at 0x84cbe808: the image bakes 0x84d95258 there, but
+   OoT's UpdateTextBoxTextureThread crashed on it being 0 at the same cutscene point every session (2026-11-06),
+   so something clears it mid-run. This logs every change of the slot with its time, to pin down which transition
+   does it; a64_call_miss's null guard (hos_hostcall.c) keeps the thread alive meanwhile. */
+static DWORD WINAPI hos_text_table_watch(void *arg) {
+    (void)arg;
+    uint8_t *at = (uint8_t *)A64_MEM + 0x84cbe808ull;
+    uint64_t was;
+    memcpy(&was, at, 8);
+    hos_log("watch: text callback table entry starts %#llx", (unsigned long long)was);
+    for (;;) {
+        Sleep(1000);
+        uint64_t now;
+        memcpy(&now, at, 8);
+        if (now != was) {
+            hos_log("watch: text callback table entry %#llx -> %#llx", (unsigned long long)was,
+                    (unsigned long long)now);
+            was = now;
+        }
+    }
+    return 0;
+}
+
+
 /* Call guest code at `addr` as a fresh call from the top of the main thread's stack, with whatever arguments the
    caller put in x0-x7 (call_guest clears x0 and x1 first; call_guest_args keeps them). */
 static void call_guest_args(Ctx *c, uint64_t addr, uint64_t sp, const char *what) {
@@ -276,6 +300,7 @@ int main(int argc, char **argv) {
     void hos_mods_init(const char *image_path);
     hos_mods_init(image);   /* mods.c: <exe folder>\mods (RomFS files, exefs data patches) */
 
+    CreateThread(NULL, 0, hos_text_table_watch, NULL, 0, NULL);   /* (diagnosing the 0x84cbe808 clears) */
 #if defined(__linux__)
     /* (Linux: the window and the SDL pump live on this thread, and the guest boots onto
        linux_display_enter's 256 MB stack thread; Windows keeps the guest here) */
