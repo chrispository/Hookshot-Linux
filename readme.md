@@ -1,3 +1,5 @@
+the original hookshot repo with utmostmick0's PR for linux support: https://github.com/NotRexed/Hookshot/pull/32
+
 <h1 align="center">
   <br>
   <a>
