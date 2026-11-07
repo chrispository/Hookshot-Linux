@@ -163,3 +163,13 @@ void movie_reader_close(MovieReader *r) {
     avformat_close_input(&r->fmt);
     free(r);
 }
+
+/* nn_video.c's Media Foundation AV1 fallback (host/mf_av1.c, Windows) referenced unconditionally: on Linux,
+   system FFmpeg ships libdav1d, so these only satisfy the linker and keep movies on FFmpeg's AV1 decoder. */
+typedef void (*mf_av1_picture_fn)(void *user, const uint8_t *y, const uint8_t *uv, int w, int h, int stride, int64_t pts);
+void *mf_av1_open(int w, int h) { (void)w; (void)h; return NULL; }
+void mf_av1_decode(void *m, const uint8_t *data, size_t n, int64_t pts, mf_av1_picture_fn fn, void *user) {
+    (void)m; (void)data; (void)n; (void)pts; (void)fn; (void)user;
+}
+void mf_av1_flush(void *m) { (void)m; }
+void mf_av1_close(void *m) { (void)m; }
