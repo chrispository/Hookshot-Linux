@@ -182,3 +182,11 @@ Two ways forward, to decide after the first launch:
   first experiment for the camera: Hor+ picture, stretched HUD, no letterbox (no
   renderer on Linux yet). Next: probe build + play session + `samap.py` for the camera
   fdiv sites, per the plan above.
+- 2026-11-07: two guest crashes fixed on the way (both also filed upstream as
+  NotRexed/Hookshot#55, branch `fix/timer-and-null-call`): the rumble thread's first
+  `WaitTimerEvent` beat its starter when a controller is present from boot (now blocks,
+  as Horizon's would), and OoT's text release trampoline jumped through a callback
+  table entry (`0x84cbe808`, baked valid) that reads 0 by the first cutscene's end
+  (a64_call_miss now skips calls to 0; a watch thread on the entry logs what clears it).
+  Controller input confirmed working end to end (SDL3 gamepad, Nintendo-style mapping,
+  `HOS_PAD_LOG=1` shows presses); A/B (and maybe X/Y) swap on the Xbox pad still to do.
