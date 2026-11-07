@@ -1,3 +1,5 @@
+update: i ended up switching to [greenhat lichii](https://github.com/zortos293/Lichii) — much better results
+
 the original hookshot repo with utmostmick0's PR for linux support: https://github.com/NotRexed/Hookshot/pull/32
 
 pushing various fixes to main as i play through
