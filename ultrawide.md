@@ -116,7 +116,69 @@ Yes, but only incrementally, and that is cheap after the first build:
 So the iteration loop for step 1–4 is: edit gen patch / hook → rebuild one object + link →
 run. Minutes, not the ~40-minute first build.
 
+## The renderer problem (discovered at first link)
+
+The full present pipeline — letterboxing (`present_rect`), FSR, frame generation, the
+F6–F10 hotkeys, and the only real consumer of `hos_view_aspect` — lives in
+`gpu/render/rx_present_fx.cpp`, which `build.py` compiles **only when wgpu-native is
+available** (`work/eg` layout: `webgpu.h` + `libwgpu_native.so`). The PR's Linux build
+runs **without the renderer**: `host/linux/wgpu_stub.c` stubs the `wgr_*` surface, and the
+Vulkan back end presents the game's frame straight into the swapchain. Consequences:
+
+- No letterboxing: a 43:18 window shows the 16:9 frame **stretched**, not pillarboxed.
+- No FSR / framegen / sharpness / in-window hotkeys; the Insert menu is Windows-only too
+  (`vk_menu.cpp` is excluded from Linux builds by build.py).
+- `hos_view_aspect` exists but nothing reads it.
+
+Two ways forward, to decide after the first launch:
+
+1. **Get wgpu-native on Linux** (download or build `libwgpu_native.so` matching
+   `gpu/compat`'s `webgpu.h`; build.py looks under `work/eg` / `RX_CPM` / `WGPU_NATIVE`).
+   Restores the whole present pipeline unchanged. Best if a compatible release exists.
+2. **Port aspect-correct present into the Vulkan back end** (`gpu/vk/vk_replay.cpp`
+   present path): compute `present_rect`'s centered-rect math at blit time and clear the
+   bars. Also the natural home for the Hor+ stretch once cameras are patched — one
+   renderer, no wgpu dependency. More work, fully under our control.
+
+## Link fixes made on the way (Linux build bugs in PR #32)
+
+- `vk_memory.cpp`: lambda return type deduction mixed `unsigned long long` with
+  `uint64_t` (clang/Linux LP64); fixed with an explicit `-> uint64_t`.
+- `nx2/build.py` + `scripts/build-linux.sh`: `libavformat` was missing from the FFmpeg
+  pkg-config list, but `host/linux/movie_ff.c` calls libavformat's `av_read_frame`.
+- `host/linux/wgpu_stub.c`: `rx_present_hotkey` was referenced by `display.c` but not
+  stubbed; added (returns a "no renderer" notice).
+
 ## Status log
 
 - 2026-11-06: branch created; recon (above). First full build (main's compiler run) still
   in progress; ultrawide work starts on top of it once the toolchain run is proven.
+- 2026-11-06 (later): first compile of 57 gen files + all host/vk sources reached the
+  link in ~19 min; three Linux link/build fixes above; `nx2/oot_patches.py` gained an
+  env-gated aspect-div probe (`OOT_DIV_PROBE=1`, instruments `a64_fpx_div32_div32` to log
+  near-16:9 quotients with caller addresses for `samap.py`).
+- 2026-11-06 (evening): **first visual run on Linux** — Vulkan back end on an RTX 4090,
+  swapchain up, locked 60.0 fps. Four fixes were needed first, all PR #32 gaps:
+  1. **Headless boot**: `main()` booted the guest directly and never called PR's
+     `linux_display_enter` — the Linux display layer existed but was dead code
+     ("hos_display_start called before the SDL window existed"; audio only, no window).
+     Fix: `host/hos_main.c` split into `main()` + `guest_boot()`; on Linux `main` hands
+     `guest_boot` to `linux_display_enter` (window + SDL pump on the main thread, guest
+     on its 256 MB-stack thread), Windows path unchanged.
+  2. **`hookshot_vk.so` link**: plain `clang` driver left `std::thread::_State::~_State()`
+     undefined; the vk link now includes `-lstdc++` on Linux (build.py).
+  3. **`mkwvk::opts` + menu symbols**: `vk_menu.cpp` (Win32 keyboard polling) is excluded
+     on Linux, so the `Options` struct and menu entry points had no definition; added
+     `gpu/vk/vk_menu_stub.cpp` (options at documented defaults, menu never open).
+  4. **Win32 shims at dlopen**: the .so imports `LoadLibraryA`/`GetProcAddress`/
+     `VirtualAlloc`/`SetThreadAffinityMask` from `host/linux/win32.c` **in the exe** —
+     a Windows DLL importing from its host exe's export table. Linux equivalent: exe
+     linked with `-rdynamic` (build.py). Testing the .so standalone with ctypes gives
+     false failures on exactly these symbols; only the launched exe is the real test.
+- 2026-11-06 (evening, 2): found that Hookshot already ships a boot-time aspect patch:
+  `hos_main.c` reads `HOS_ASPECT=<ratio>` (or the Insert menu's `ultrawide=1` on Windows,
+  from the main monitor's shape) and rewrites the 16:9 constant at guest `0x83E6131C` —
+  the same constant identified in recon. `HOS_ASPECT=2.3889` (43:18) is therefore the
+  first experiment for the camera: Hor+ picture, stretched HUD, no letterbox (no
+  renderer on Linux yet). Next: probe build + play session + `samap.py` for the camera
+  fdiv sites, per the plan above.

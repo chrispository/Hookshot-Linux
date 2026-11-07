@@ -438,7 +438,10 @@ def main():
         exe = os.path.join(out, "hookshot" + (".exe" if WINDOWS else ""))
         t = time.time()
         map_file = exe[:-4] + ".map" if WINDOWS else exe + ".map"
-        link_flags = (["-Wl,/map:" + map_file, "-Wl,/stack:8388608"] if WINDOWS else ["-Wl,-Map," + map_file])
+        link_flags = (["-Wl,/map:" + map_file, "-Wl,/stack:8388608"] if WINDOWS else
+                      ["-Wl,-Map," + map_file] + (["-rdynamic"] if LINUX else []))
+        # (-rdynamic: hookshot_vk.so's Win32 shims — LoadLibraryA, GetProcAddress, VirtualAlloc — resolve
+        #  from this executable at dlopen, the way a Windows DLL imports from its host exe's exports)
         renderer_libs = ([os.path.join(WGPU, "lib", "wgpu_native.dll.lib")] if WINDOWS and wgpu else
                          (["-L" + os.path.join(WGPU, "lib"), "-lwgpu_native", "-Wl,-rpath,$ORIGIN"] if wgpu else []))
         media_libs = (([os.path.join(FFMPEG, "lib", l + ".lib") for l in ("avcodec", "swscale", "swresample", "avutil")] +
@@ -478,7 +481,7 @@ def main():
         vk_link_flags = (["-Wl,/map:" + vk_map] if WINDOWS else ["-Wl,-Map," + vk_map])
         r = subprocess.run([cc] + toolchain.native_target() + toolchain.native_link() +
                            ["-shared", "-o", vdll] + vk_link_flags + ["@" + vrsp] +
-                           (["-luser32", "-lgdi32"] if WINDOWS else ["-ldl", "-pthread"]),
+                           (["-luser32", "-lgdi32"] if WINDOWS else ["-ldl", "-lstdc++", "-pthread"]),
                            capture_output=True, text=True)
         if r.returncode:
             undefined = sorted({l.strip() for l in (r.stdout + r.stderr).splitlines() if "undefined symbol" in l})

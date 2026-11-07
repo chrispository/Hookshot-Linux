@@ -142,6 +142,7 @@ static void call_guest(Ctx *c, uint64_t addr, uint64_t sp, const char *what) {
 }
 
 float hos_aspect_ratio = 0;   /* (the window's default shape: host/display.c) */
+static void guest_boot(void);   /* the guest's boot through nnMain; defined after main */
 int main(int argc, char **argv) {
 #ifdef _WIN32
     {   // (the whole process, not only the window's thread: the renderer asks the window's size from its own, and on a 4K screen at 150%
@@ -275,6 +276,19 @@ int main(int argc, char **argv) {
     void hos_mods_init(const char *image_path);
     hos_mods_init(image);   /* mods.c: <exe folder>\mods (RomFS files, exefs data patches) */
 
+#if defined(__linux__)
+    /* (Linux: the window and the SDL pump live on this thread, and the guest boots onto
+       linux_display_enter's 256 MB stack thread; Windows keeps the guest here) */
+    void linux_display_enter(void (*boot)(void));   /* host/linux/display.c */
+    linux_display_enter(guest_boot);
+    return 0;
+#else
+    guest_boot();
+    return 0;
+#endif
+}
+
+static void guest_boot(void) {
     Ctx *c = hos_boot_main_thread(hos_main_stack_size);
     uint64_t sp = c->x[31];
     void hos_prof_start(void);
@@ -289,8 +303,7 @@ int main(int argc, char **argv) {
        f2 is every module's DT_INIT, f3 the DT_FINIs (not needed: we never return from nnMain to unload). */
     call_guest(c, hos_entry_init_libc0, sp, "_init_libc0");
     c->x[0] = hos_thread_handle(hos_self());   /* the main thread's handle */
-    c->x[1] = 0;                               /* program arguments: none (an unmapped address) */
-    call_guest_args(c, hos_entry_nnosInitialize, sp, "nnosInitialize");
+    c->x[1] = 0;                               /* program arguments: none (an unmapped address) */    call_guest_args(c, hos_entry_nnosInitialize, sp, "nnosInitialize");
     void hos_thread_adopt_guest(HosThread *t);
     hos_thread_adopt_guest(hos_self());
     call_guest(c, hos_entry_init_libc1, sp, "_init_libc1");
@@ -305,5 +318,4 @@ int main(int argc, char **argv) {
     }
     call_guest(c, hos_entry_nnMain, sp, "nnMain");
     hos_log("nnMain returned");
-    return 0;
 }
